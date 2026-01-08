@@ -1124,26 +1124,26 @@ fn main() {
                 hook_type,
                 expanded,
             } => handle_hook_show(hook_type.as_deref(), expanded),
-            HookCommand::PostCreate { name, yes } => {
-                run_hook(HookType::PostCreate, yes, name.as_deref())
+            HookCommand::PostCreate { name, yes, vars } => {
+                run_hook(HookType::PostCreate, yes, name.as_deref(), &vars)
             }
-            HookCommand::PostStart { name, yes } => {
-                run_hook(HookType::PostStart, yes, name.as_deref())
+            HookCommand::PostStart { name, yes, vars } => {
+                run_hook(HookType::PostStart, yes, name.as_deref(), &vars)
             }
-            HookCommand::PostSwitch { name, yes } => {
-                run_hook(HookType::PostSwitch, yes, name.as_deref())
+            HookCommand::PostSwitch { name, yes, vars } => {
+                run_hook(HookType::PostSwitch, yes, name.as_deref(), &vars)
             }
-            HookCommand::PreCommit { name, yes } => {
-                run_hook(HookType::PreCommit, yes, name.as_deref())
+            HookCommand::PreCommit { name, yes, vars } => {
+                run_hook(HookType::PreCommit, yes, name.as_deref(), &vars)
             }
-            HookCommand::PreMerge { name, yes } => {
-                run_hook(HookType::PreMerge, yes, name.as_deref())
+            HookCommand::PreMerge { name, yes, vars } => {
+                run_hook(HookType::PreMerge, yes, name.as_deref(), &vars)
             }
-            HookCommand::PostMerge { name, yes } => {
-                run_hook(HookType::PostMerge, yes, name.as_deref())
+            HookCommand::PostMerge { name, yes, vars } => {
+                run_hook(HookType::PostMerge, yes, name.as_deref(), &vars)
             }
-            HookCommand::PreRemove { name, yes } => {
-                run_hook(HookType::PreRemove, yes, name.as_deref())
+            HookCommand::PreRemove { name, yes, vars } => {
+                run_hook(HookType::PreRemove, yes, name.as_deref(), &vars)
             }
             HookCommand::Approvals { action } => match action {
                 ApprovalsCommand::Add { all } => add_approvals(all),
@@ -1315,12 +1315,32 @@ fn main() {
                         yes,
                     );
 
+                    // Build extra vars for base branch context
+                    // "base" is the branch we branched from when creating a new worktree.
+                    // For existing worktrees, there's no base concept.
+                    let (base_branch, base_worktree_path): (Option<&str>, Option<&str>) =
+                        match &result {
+                            SwitchResult::Created {
+                                base_branch,
+                                base_worktree_path,
+                                ..
+                            } => (base_branch.as_deref(), base_worktree_path.as_deref()),
+                            SwitchResult::Existing(_) | SwitchResult::AlreadyAt(_) => (None, None),
+                        };
+                    let extra_vars: Vec<(&str, &str)> = [
+                        base_branch.map(|b| ("base", b)),
+                        base_worktree_path.map(|p| ("base_worktree_path", p)),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+
                     // Post-switch runs first (immediate "I'm here" signal)
-                    ctx.spawn_post_switch_commands(hooks_display_path.as_deref())?;
+                    ctx.spawn_post_switch_commands(&extra_vars, hooks_display_path.as_deref())?;
 
                     // Post-start runs only on creation (setup tasks)
                     if matches!(&result, SwitchResult::Created { .. }) {
-                        ctx.spawn_post_start_commands(hooks_display_path.as_deref())?;
+                        ctx.spawn_post_start_commands(&extra_vars, hooks_display_path.as_deref())?;
                     }
                 }
 

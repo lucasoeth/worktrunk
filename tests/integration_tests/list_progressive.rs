@@ -24,7 +24,7 @@ fn test_list_progressive_rendering_basic(mut repo: TestRepo) {
     );
 
     // Basic assertions
-    assert_eq!(output.exit_code, 0, "Command should succeed");
+    assert_eq!(output.exit_code, 0);
     assert!(
         output.stages.len() > 1,
         "Should capture multiple stages, got {}",
@@ -46,9 +46,9 @@ fn test_list_progressive_rendering_basic(mut repo: TestRepo) {
 
     // Verify final output has all worktrees
     let final_text = output.final_output();
-    assert!(final_text.contains("feature-a"), "Should contain feature-a");
-    assert!(final_text.contains("feature-b"), "Should contain feature-b");
-    assert!(final_text.contains("bugfix"), "Should contain bugfix");
+    assert!(final_text.contains("feature-a"));
+    assert!(final_text.contains("feature-b"));
+    assert!(final_text.contains("bugfix"));
 
     // Final output should have fewer dots than initial (verified by verify_progressive_filling)
     // No need for additional assertions - verify_progressive_filling already confirms progressive behavior
@@ -126,7 +126,6 @@ fn test_list_progressive_snapshot_at(mut repo: TestRepo) {
     );
 }
 
-/// Test with a larger dataset to ensure progressive rendering is visible
 #[rstest]
 fn test_list_progressive_many_worktrees(mut repo: TestRepo) {
     // Create many worktrees to ensure rendering takes time
@@ -169,7 +168,6 @@ fn test_list_progressive_many_worktrees(mut repo: TestRepo) {
     output.verify_progressive_filling().unwrap();
 }
 
-/// Test that we can capture output even for fast commands
 #[rstest]
 fn test_list_progressive_fast_command(repo: TestRepo) {
     // Run list without any worktrees (fast)
@@ -180,7 +178,7 @@ fn test_list_progressive_fast_command(repo: TestRepo) {
         ProgressiveCaptureOptions::with_byte_interval(600),
     );
 
-    assert_eq!(output.exit_code, 0, "Command should succeed");
+    assert_eq!(output.exit_code, 0);
 
     // Even fast commands should capture at least the final state
     assert!(

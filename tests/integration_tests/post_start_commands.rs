@@ -8,7 +8,7 @@ use insta_cmd::assert_cmd_snapshot;
 use rstest::rstest;
 use std::fs;
 use std::thread;
-use std::time::Duration;
+use std::time::Duration; // Used for SLEEP_FOR_ABSENCE_CHECK
 use tempfile::TempDir;
 
 /// Wait duration when checking file absence (testing command did NOT run).
@@ -350,7 +350,76 @@ fn test_post_create_upstream_template(#[from(repo_with_remote)] repo: TestRepo) 
     );
 }
 
-/// Test that hooks receive JSON context on stdin
+#[rstest]
+fn test_post_create_base_variables(repo: TestRepo) {
+    // Create project config with base template variables
+    repo.write_project_config(
+        r#"[post-create]
+base = "echo 'Base: {{ base }}' > base_info.txt"
+base_path = "echo 'Base Path: {{ base_worktree_path }}' >> base_info.txt"
+"#,
+    );
+
+    repo.commit("Add config with base template variables");
+
+    // Pre-approve the commands
+    repo.write_test_config(
+        r#"[projects."repo"]
+approved-commands = [
+    "echo 'Base: {{ base }}' > base_info.txt",
+    "echo 'Base Path: {{ base_worktree_path }}' >> base_info.txt",
+]
+"#,
+    );
+
+    // Create a feature branch worktree from main
+    snapshot_switch(
+        "post_create_base_variables",
+        &repo,
+        &["--create", "feature", "--base", "main"],
+    );
+
+    // Verify template expansion actually worked
+    let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
+    let base_file = worktree_path.join("base_info.txt");
+
+    assert!(
+        base_file.exists(),
+        "base_info.txt should have been created in the worktree"
+    );
+
+    let contents = fs::read_to_string(&base_file).unwrap();
+
+    // Verify base variable (branch name we branched from)
+    assert!(
+        contents.contains("Base: main"),
+        "Should contain expanded base branch, got: {}",
+        contents
+    );
+
+    // Verify base_worktree_path variable (path to main worktree)
+    // The path should contain the repo root (main worktree is at repo root)
+    assert!(
+        contents.contains("Base Path: "),
+        "Should have base_worktree_path line, got: {}",
+        contents
+    );
+
+    // The base_worktree_path should be the main worktree's path (POSIX format)
+    let base_path_line = contents
+        .lines()
+        .find(|l| l.starts_with("Base Path: "))
+        .expect("Should have Base Path line");
+    let base_path = base_path_line.strip_prefix("Base Path: ").unwrap();
+
+    // Convert expected path to POSIX format for comparison
+    let expected_base_path = worktrunk::path::to_posix_path(&repo.root_path().to_string_lossy());
+    assert_eq!(
+        base_path, expected_base_path,
+        "Base path should match main worktree path"
+    );
+}
+
 #[rstest]
 fn test_post_create_json_stdin(repo: TestRepo) {
     use crate::common::wt_command;
@@ -426,7 +495,6 @@ approved-commands = ["cat > context.json"]
     );
 }
 
-/// Test that an actual script file can read JSON from stdin
 #[rstest]
 #[cfg(unix)]
 fn test_post_create_script_reads_json(repo: TestRepo) {
@@ -519,7 +587,6 @@ approved-commands = ["./scripts/setup.py"]
     );
 }
 
-/// Test that background hooks also receive JSON context on stdin
 #[rstest]
 fn test_post_start_json_stdin(repo: TestRepo) {
     use crate::common::wt_command;
@@ -554,7 +621,7 @@ approved-commands = ["cat > context.json"]
     // Find the worktree and wait for valid JSON (polls until cat finishes writing)
     let worktree_path = repo.root_path().parent().unwrap().join("repo.bg-json");
     let json_file = worktree_path.join("context.json");
-    let json = wait_for_valid_json(&json_file, Duration::from_secs(5));
+    let json = wait_for_valid_json(&json_file);
 
     assert_eq!(
         json["branch"].as_str(),
@@ -603,11 +670,11 @@ approved-commands = ["sleep 0.1 && echo 'Background task done' > background.txt"
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let git_common_dir = resolve_git_common_dir(&worktree_path);
     let log_dir = git_common_dir.join("wt-logs");
-    assert!(log_dir.exists(), "Log directory should be created");
+    assert!(log_dir.exists());
 
     // Wait for the background command to complete
     let output_file = worktree_path.join("background.txt");
-    wait_for_file(output_file.as_path(), Duration::from_secs(5));
+    wait_for_file(output_file.as_path());
 }
 
 #[rstest]
@@ -641,14 +708,8 @@ approved-commands = [
 
     // Wait for both background commands
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
-    wait_for_file(
-        worktree_path.join("task1.txt").as_path(),
-        Duration::from_secs(5),
-    );
-    wait_for_file(
-        worktree_path.join("task2.txt").as_path(),
-        Duration::from_secs(5),
-    );
+    wait_for_file(worktree_path.join("task1.txt").as_path());
+    wait_for_file(worktree_path.join("task2.txt").as_path());
 }
 
 #[rstest]
@@ -684,11 +745,8 @@ approved-commands = [
         "Post-create command should have completed before wt exits"
     );
 
-    // Wait for background command with generous timeout for slow CI systems
-    wait_for_file(
-        worktree_path.join("server.txt").as_path(),
-        Duration::from_secs(5),
-    );
+    // Wait for background command
+    wait_for_file(worktree_path.join("server.txt").as_path());
 }
 
 #[rstest]
@@ -730,7 +788,7 @@ approved-commands = ["echo 'stdout output' && echo 'stderr output' >&2"]
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let git_common_dir = resolve_git_common_dir(&worktree_path);
     let log_dir = git_common_dir.join("wt-logs");
-    wait_for_file_count(&log_dir, "log", 1, Duration::from_secs(5));
+    wait_for_file_count(&log_dir, "log", 1);
 
     // Find the log file
     let log_files: Vec<_> = fs::read_dir(&log_dir)
@@ -749,7 +807,7 @@ approved-commands = ["echo 'stdout output' && echo 'stderr output' >&2"]
 
     // Wait for content to be written (background command might still be writing)
     let log_file = &log_files[0];
-    wait_for_file_content(log_file, Duration::from_secs(5));
+    wait_for_file_content(log_file);
 
     let log_contents = fs::read_to_string(log_file).unwrap();
 
@@ -819,7 +877,7 @@ approved-commands = [
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let git_common_dir = resolve_git_common_dir(&worktree_path);
     let log_dir = git_common_dir.join("wt-logs");
-    wait_for_file_count(&log_dir, "log", 3, Duration::from_secs(5));
+    wait_for_file_count(&log_dir, "log", 3);
 
     let log_files: Vec<_> = fs::read_dir(&log_dir)
         .unwrap()
@@ -829,7 +887,7 @@ approved-commands = [
 
     // Wait for content to be flushed in each log file before reading
     for entry in &log_files {
-        wait_for_file_content(&entry.path(), Duration::from_secs(5));
+        wait_for_file_content(&entry.path());
     }
 
     // Read all log files and verify no cross-contamination
@@ -903,10 +961,7 @@ approved-commands = ["echo 'Background task' > background.txt"]
     );
 
     // Wait for background command to complete
-    wait_for_file(
-        worktree_path.join("background.txt").as_path(),
-        Duration::from_secs(5),
-    );
+    wait_for_file(worktree_path.join("background.txt").as_path());
 }
 
 #[rstest]
@@ -930,7 +985,7 @@ approved-commands = ["echo 'line1\nline2\nline3' | grep line2 > filtered.txt"]
     // Wait for background command to create the file AND flush content
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let filtered_file = worktree_path.join("filtered.txt");
-    wait_for_file_content(filtered_file.as_path(), Duration::from_secs(5));
+    wait_for_file_content(filtered_file.as_path());
 
     let contents = fs::read_to_string(&filtered_file).unwrap();
     assert_snapshot!(contents, @"line2");
@@ -974,7 +1029,7 @@ approved-commands = ["""
     // Wait for background command to write all 3 lines (not just the first)
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let output_file = worktree_path.join("multiline.txt");
-    wait_for_file_lines(output_file.as_path(), 3, Duration::from_secs(5));
+    wait_for_file_lines(output_file.as_path(), 3);
 
     let contents = fs::read_to_string(&output_file).unwrap();
     assert_snapshot!(contents, @"
@@ -1039,7 +1094,6 @@ approved-commands = ["""
 // Regression Tests
 // ============================================================================
 
-/// Test that post-start commands DO NOT run when switching to an existing worktree.
 ///
 /// This is a regression test for a bug where post-start commands were running on ALL
 /// `wt switch` operations instead of only on `wt switch --create`.
@@ -1067,7 +1121,7 @@ approved-commands = ["echo 'POST-START-RAN' > post_start_marker.txt"]
     // Wait for background post-start command to complete
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let marker_file = worktree_path.join("post_start_marker.txt");
-    wait_for_file(marker_file.as_path(), Duration::from_secs(5));
+    wait_for_file(marker_file.as_path());
 
     // Remove the marker file to detect if post-start runs again
     fs::remove_file(&marker_file).unwrap();

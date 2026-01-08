@@ -7,7 +7,6 @@ use rstest::rstest;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 #[test]
 fn test_bare_repo_list_worktrees() {
@@ -170,7 +169,7 @@ fn test_bare_repo_remove_worktree() {
     );
 
     // Verify main worktree still exists
-    assert!(main_worktree.exists(), "Main worktree should still exist");
+    assert!(main_worktree.exists());
 }
 
 #[test]
@@ -292,7 +291,6 @@ fn test_bare_repo_commands_from_bare_directory() {
     });
 }
 
-/// Test that merge workflow works correctly with bare repositories.
 ///
 /// Skipped on Windows due to file locking issues that prevent worktree removal
 /// during background cleanup after merge. The merge functionality itself works
@@ -317,7 +315,7 @@ fn test_bare_repo_merge_workflow() {
 
     // Get feature worktree path (template: {{ branch }} -> repo/feature)
     let feature_worktree = test.bare_repo_path().join("feature");
-    assert!(feature_worktree.exists(), "Feature worktree should exist");
+    assert!(feature_worktree.exists());
 
     // Make a commit in feature worktree
     test.commit_in(&feature_worktree, "Feature work");
@@ -358,7 +356,7 @@ fn test_bare_repo_merge_workflow() {
     );
 
     // Verify main worktree still exists and has the feature commit
-    assert!(main_worktree.exists(), "Main worktree should still exist");
+    assert!(main_worktree.exists());
 
     // Check that feature branch commit is now in main
     let log_output = test
@@ -408,7 +406,7 @@ fn test_bare_repo_background_logs_location() {
     // Wait for background process to create log file (poll instead of fixed sleep)
     // The key test is that the path is correct, not that content was written (background processes are flaky in tests)
     let log_path = test.bare_repo_path().join("wt-logs/feature-remove.log");
-    wait_for_file(&log_path, Duration::from_secs(5));
+    wait_for_file(&log_path);
 
     // Verify it's NOT in the worktree's .git directory (which doesn't exist for linked worktrees)
     let wrong_path = main_worktree.join(".git/wt-logs/feature-remove.log");
@@ -582,7 +580,6 @@ impl TestRepoBase for NestedBareRepoTest {
     }
 }
 
-/// Test that nested bare repos (project/.git pattern) create worktrees in project/
 /// instead of project/.git/ (GitHub issue #313)
 #[test]
 fn test_nested_bare_repo_worktree_path() {
@@ -622,7 +619,6 @@ fn test_nested_bare_repo_worktree_path() {
     );
 }
 
-/// Test that nested bare repos work with the full workflow (create, list, remove)
 #[test]
 fn test_nested_bare_repo_full_workflow() {
     let test = NestedBareRepoTest::new();
@@ -637,7 +633,7 @@ fn test_nested_bare_repo_full_workflow() {
     cmd.output().unwrap();
 
     let main_worktree = test.project_path().join("main");
-    assert!(main_worktree.exists(), "Main worktree should exist");
+    assert!(main_worktree.exists());
     test.commit_in(&main_worktree, "Initial");
 
     // Create feature worktree
@@ -679,10 +675,9 @@ fn test_nested_bare_repo_full_workflow() {
         !feature_worktree.exists(),
         "Feature worktree should be removed"
     );
-    assert!(main_worktree.exists(), "Main worktree should still exist");
+    assert!(main_worktree.exists());
 }
 
-/// Test snapshot for nested bare repo list output
 #[test]
 fn test_nested_bare_repo_list_snapshot() {
     let test = NestedBareRepoTest::new();

@@ -16,6 +16,8 @@ use std::fs;
 use std::thread;
 use std::time::Duration;
 
+// Note: Duration is still imported for SLEEP_FOR_ABSENCE_CHECK (testing command did NOT run)
+
 /// Wait duration when checking file absence (testing command did NOT run).
 const SLEEP_FOR_ABSENCE_CHECK: Duration = Duration::from_millis(500);
 
@@ -79,12 +81,12 @@ approved-commands = ["echo 'PROJECT_HOOK' >> hook_order.txt"]
     // Verify execution order
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let order_file = worktree_path.join("hook_order.txt");
-    assert!(order_file.exists(), "Hook order file should exist");
+    assert!(order_file.exists());
 
     let contents = fs::read_to_string(&order_file).unwrap();
     let lines: Vec<&str> = contents.lines().collect();
 
-    assert_eq!(lines.len(), 2, "Should have two hooks executed");
+    assert_eq!(lines.len(), 2);
     assert_eq!(lines[0], "USER_HOOK", "User hook should run first");
     assert_eq!(lines[1], "PROJECT_HOOK", "Project hook should run second");
 }
@@ -188,7 +190,7 @@ bg = "echo 'USER_POST_START_RAN' > user_bg_marker.txt"
     // Wait for background hook to complete and write content
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let marker_file = worktree_path.join("user_bg_marker.txt");
-    wait_for_file_content(&marker_file, Duration::from_secs(5));
+    wait_for_file_content(&marker_file);
 
     let contents = fs::read_to_string(&marker_file).unwrap();
     assert!(
@@ -311,7 +313,6 @@ check = "echo 'USER_PRE_MERGE' > user_premerge_marker.txt"
     );
 }
 
-/// Test that hooks receive SIGINT when Ctrl-C is pressed.
 ///
 /// Real Ctrl-C sends SIGINT to the entire foreground process group. We simulate this by:
 /// 1. Spawning wt in its own process group (so we don't kill the test runner)
@@ -346,7 +347,7 @@ long = "sh -c 'echo start >> hook.log; sleep 30; echo done >> hook.log'"
 
     // Wait until hook writes "start" to hook.log (verifies the hook is running)
     let hook_log = repo.root_path().join("hook.log");
-    wait_for_file_content(&hook_log, Duration::from_secs(5));
+    wait_for_file_content(&hook_log);
 
     // Send SIGINT to wt's process group (wt's PID == its PGID since it's the leader)
     // This simulates real Ctrl-C which sends SIGINT to the foreground process group
@@ -376,7 +377,6 @@ long = "sh -c 'echo start >> hook.log; sleep 30; echo done >> hook.log'"
     );
 }
 
-/// Test that hooks receive SIGTERM and do not continue after termination.
 #[rstest]
 #[cfg(unix)]
 fn test_pre_merge_hook_receives_sigterm(repo: TestRepo) {
@@ -407,7 +407,7 @@ long = "sh -c 'echo start >> hook.log; sleep 30; echo done >> hook.log'"
 
     // Wait until hook writes "start" to hook.log (verifies the hook is running)
     let hook_log = repo.root_path().join("hook.log");
-    wait_for_file_content(&hook_log, Duration::from_secs(5));
+    wait_for_file_content(&hook_log);
 
     // Send SIGTERM to wt's process group (wt's PID == its PGID since it's the leader)
     let wt_pgid = Pid::from_raw(child.id() as i32);
@@ -645,7 +645,7 @@ vars = "echo 'repo={{ repo }} branch={{ branch }}' > template_vars.txt"
     // Verify template variables were expanded
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
     let vars_file = worktree_path.join("template_vars.txt");
-    assert!(vars_file.exists(), "Template vars file should exist");
+    assert!(vars_file.exists());
 
     let contents = fs::read_to_string(&vars_file).unwrap();
     assert!(
@@ -689,11 +689,8 @@ approved-commands = ["echo 'PROJECT_POST_START' > project_bg.txt"]
     let worktree_path = repo.root_path().parent().unwrap().join("repo.feature");
 
     // Wait for both background commands
-    wait_for_file(&worktree_path.join("user_bg.txt"), Duration::from_secs(5));
-    wait_for_file(
-        &worktree_path.join("project_bg.txt"),
-        Duration::from_secs(5),
-    );
+    wait_for_file(&worktree_path.join("user_bg.txt"));
+    wait_for_file(&worktree_path.join("project_bg.txt"));
 
     // Both should have run
     assert!(
@@ -710,7 +707,6 @@ approved-commands = ["echo 'PROJECT_POST_START' > project_bg.txt"]
 // Standalone Hook Execution Tests (wt hook <type>)
 // ============================================================================
 
-/// Test `wt hook post-create` standalone execution
 #[rstest]
 fn test_standalone_hook_post_create(repo: TestRepo) {
     // Write project config with post-create hook
@@ -734,7 +730,6 @@ fn test_standalone_hook_post_create(repo: TestRepo) {
     assert!(content.contains("STANDALONE_POST_CREATE"));
 }
 
-/// Test `wt hook post-start` standalone execution
 #[rstest]
 fn test_standalone_hook_post_start(repo: TestRepo) {
     // Write project config with post-start hook
@@ -750,12 +745,11 @@ fn test_standalone_hook_post_start(repo: TestRepo) {
 
     // Hook spawns in background - wait for marker file
     let marker = repo.root_path().join("hook_ran.txt");
-    wait_for_file_content(&marker, Duration::from_secs(5));
+    wait_for_file_content(&marker);
     let content = fs::read_to_string(&marker).unwrap();
     assert!(content.contains("STANDALONE_POST_START"));
 }
 
-/// Test `wt hook pre-commit` standalone execution
 #[rstest]
 fn test_standalone_hook_pre_commit(repo: TestRepo) {
     // Write project config with pre-commit hook
@@ -776,7 +770,6 @@ fn test_standalone_hook_pre_commit(repo: TestRepo) {
     assert!(content.contains("STANDALONE_PRE_COMMIT"));
 }
 
-/// Test `wt hook post-merge` standalone execution
 #[rstest]
 fn test_standalone_hook_post_merge(repo: TestRepo) {
     // Write project config with post-merge hook
@@ -797,7 +790,6 @@ fn test_standalone_hook_post_merge(repo: TestRepo) {
     assert!(content.contains("STANDALONE_POST_MERGE"));
 }
 
-/// Test `wt hook pre-remove` standalone execution
 #[rstest]
 fn test_standalone_hook_pre_remove(repo: TestRepo) {
     // Write project config with pre-remove hook
@@ -818,7 +810,6 @@ fn test_standalone_hook_pre_remove(repo: TestRepo) {
     assert!(content.contains("STANDALONE_PRE_REMOVE"));
 }
 
-/// Test `wt hook post-create` fails when no hooks configured
 #[rstest]
 fn test_standalone_hook_no_hooks_configured(repo: TestRepo) {
     // No project config, no user config with hooks
@@ -844,7 +835,6 @@ fn test_standalone_hook_no_hooks_configured(repo: TestRepo) {
 // Background Hook Execution Tests (post-start, post-switch)
 // ============================================================================
 
-/// Test that a single failing background hook logs its output
 #[rstest]
 fn test_concurrent_hook_single_failure(repo: TestRepo) {
     // Write project config with a hook that writes output before failing
@@ -864,7 +854,7 @@ fn test_concurrent_hook_single_failure(repo: TestRepo) {
 
     // Wait for log file to be created and contain output
     let log_dir = resolve_git_common_dir(repo.root_path()).join("wt-logs");
-    wait_for_file_count(&log_dir, "log", 1, Duration::from_secs(5));
+    wait_for_file_count(&log_dir, "log", 1);
 
     // Find and read the log file
     let log_file = fs::read_dir(&log_dir)
@@ -874,7 +864,7 @@ fn test_concurrent_hook_single_failure(repo: TestRepo) {
         .expect("Should have a log file");
 
     // Wait for content to be written (command runs async)
-    wait_for_file_content(&log_file.path(), Duration::from_secs(5));
+    wait_for_file_content(&log_file.path());
     let log_content = fs::read_to_string(log_file.path()).unwrap();
 
     // Verify the hook actually ran and wrote output (not just that file was created)
@@ -884,7 +874,6 @@ fn test_concurrent_hook_single_failure(repo: TestRepo) {
     );
 }
 
-/// Test that multiple background hooks each get their own log file with correct content
 #[rstest]
 fn test_concurrent_hook_multiple_failures(repo: TestRepo) {
     // Write project config with multiple named hooks (table format)
@@ -909,7 +898,7 @@ second = "echo SECOND_OUTPUT"
 
     // Wait for both log files to be created
     let log_dir = resolve_git_common_dir(repo.root_path()).join("wt-logs");
-    wait_for_file_count(&log_dir, "log", 2, Duration::from_secs(5));
+    wait_for_file_count(&log_dir, "log", 2);
 
     // Collect log files and their contents
     let log_files: Vec<_> = fs::read_dir(&log_dir)
@@ -921,7 +910,7 @@ second = "echo SECOND_OUTPUT"
 
     // Wait for content in both log files
     for log_file in &log_files {
-        wait_for_file_content(&log_file.path(), Duration::from_secs(5));
+        wait_for_file_content(&log_file.path());
     }
 
     // Collect all log contents
@@ -949,7 +938,6 @@ second = "echo SECOND_OUTPUT"
     assert!(found_second, "Should have log for 'second' hook");
 }
 
-/// Test that user and project post-start hooks both run in background
 #[rstest]
 fn test_concurrent_hook_user_and_project(repo: TestRepo) {
     // Write user config with post-start hook (using table format for named hook)
@@ -978,8 +966,8 @@ user = "echo 'USER_HOOK' > user_hook_ran.txt"
     let user_marker = repo.root_path().join("user_hook_ran.txt");
     let project_marker = repo.root_path().join("project_hook_ran.txt");
 
-    wait_for_file_content(&user_marker, Duration::from_secs(5));
-    wait_for_file_content(&project_marker, Duration::from_secs(5));
+    wait_for_file_content(&user_marker);
+    wait_for_file_content(&project_marker);
 
     let user_content = fs::read_to_string(&user_marker).unwrap();
     let project_content = fs::read_to_string(&project_marker).unwrap();
@@ -987,7 +975,6 @@ user = "echo 'USER_HOOK' > user_hook_ran.txt"
     assert!(project_content.contains("PROJECT_HOOK"));
 }
 
-/// Test that post-switch hooks also run in background
 #[rstest]
 fn test_concurrent_hook_post_switch(repo: TestRepo) {
     // Write project config with post-switch hook
@@ -1006,12 +993,11 @@ fn test_concurrent_hook_post_switch(repo: TestRepo) {
 
     // Hook spawns in background - wait for marker file
     let marker = repo.root_path().join("hook_ran.txt");
-    wait_for_file_content(&marker, Duration::from_secs(5));
+    wait_for_file_content(&marker);
     let content = fs::read_to_string(&marker).unwrap();
     assert!(content.contains("POST_SWITCH"));
 }
 
-/// Test that background hooks work with name filter
 #[rstest]
 fn test_concurrent_hook_with_name_filter(repo: TestRepo) {
     // Write project config with multiple named hooks
@@ -1039,14 +1025,13 @@ second = "echo 'SECOND' > second.txt"
     let first_marker = repo.root_path().join("first.txt");
     let second_marker = repo.root_path().join("second.txt");
 
-    wait_for_file_content(&first_marker, Duration::from_secs(5));
+    wait_for_file_content(&first_marker);
 
     // Fixed sleep for absence check - second hook should NOT have run
     thread::sleep(SLEEP_FOR_ABSENCE_CHECK);
     assert!(!second_marker.exists(), "second hook should NOT have run");
 }
 
-/// Test that concurrent hooks with invalid name filter return error
 #[rstest]
 fn test_concurrent_hook_invalid_name_filter(repo: TestRepo) {
     // Write project config with named hooks
@@ -1077,5 +1062,202 @@ first = "echo 'FIRST'"
     assert!(
         stderr.contains("project:first"),
         "Error should list available commands, got: {stderr}"
+    );
+}
+
+// ============================================================================
+// Custom Variable (--var) Tests
+// ============================================================================
+
+#[rstest]
+fn test_var_flag_overrides_template_variable(repo: TestRepo) {
+    // Write user config with a hook that uses a template variable
+    repo.write_test_config(
+        r#"[post-create]
+test = "echo '{{ target }}' > target_output.txt"
+"#,
+    );
+
+    let output = repo
+        .wt_command()
+        .args([
+            "hook",
+            "post-create",
+            "--yes",
+            "--var",
+            "target=CUSTOM_TARGET",
+        ])
+        .output()
+        .expect("Failed to run wt hook");
+
+    assert!(output.status.success(), "Hook should succeed");
+
+    let output_file = repo.root_path().join("target_output.txt");
+    let contents = fs::read_to_string(&output_file).unwrap();
+    assert!(
+        contents.contains("CUSTOM_TARGET"),
+        "Variable should be overridden in hook, got: {contents}"
+    );
+}
+
+#[rstest]
+fn test_var_flag_multiple_variables(repo: TestRepo) {
+    // Write user config with a hook that uses multiple template variables
+    repo.write_test_config(
+        r#"[post-create]
+test = "echo '{{ target }} {{ remote }}' > multi_var_output.txt"
+"#,
+    );
+
+    let output = repo
+        .wt_command()
+        .args([
+            "hook",
+            "post-create",
+            "--yes",
+            "--var",
+            "target=FIRST",
+            "--var",
+            "remote=SECOND",
+        ])
+        .output()
+        .expect("Failed to run wt hook");
+
+    assert!(output.status.success(), "Hook should succeed");
+
+    let output_file = repo.root_path().join("multi_var_output.txt");
+    let contents = fs::read_to_string(&output_file).unwrap();
+    assert!(
+        contents.contains("FIRST") && contents.contains("SECOND"),
+        "Both variables should be overridden, got: {contents}"
+    );
+}
+
+#[rstest]
+fn test_var_flag_overrides_builtin_variable(repo: TestRepo) {
+    // Write user config with a hook that uses the builtin branch variable
+    repo.write_test_config(
+        r#"[post-create]
+test = "echo '{{ branch }}' > branch_output.txt"
+"#,
+    );
+
+    let output = repo
+        .wt_command()
+        .args([
+            "hook",
+            "post-create",
+            "--yes",
+            "--var",
+            "branch=CUSTOM_BRANCH_NAME",
+        ])
+        .output()
+        .expect("Failed to run wt hook");
+
+    assert!(output.status.success(), "Hook should succeed");
+
+    let output_file = repo.root_path().join("branch_output.txt");
+    let contents = fs::read_to_string(&output_file).unwrap();
+    assert!(
+        contents.contains("CUSTOM_BRANCH_NAME"),
+        "Custom variable should override builtin, got: {contents}"
+    );
+}
+
+#[rstest]
+fn test_var_flag_invalid_format_fails() {
+    // Test that invalid KEY=VALUE format is rejected
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wt"))
+        .args(["hook", "post-create", "--var", "no_equals_sign"])
+        .output()
+        .expect("Failed to run wt");
+
+    assert!(!output.status.success(), "Invalid --var format should fail");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("invalid KEY=VALUE") || stderr.contains("no `=` found"),
+        "Error should mention invalid format, got: {stderr}"
+    );
+}
+
+#[test]
+fn test_var_flag_unknown_variable_fails() {
+    // Test that unknown variable names are rejected
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_wt"))
+        .args(["hook", "post-create", "--var", "custom_var=value"])
+        .output()
+        .expect("Failed to run wt");
+
+    assert!(!output.status.success(), "Unknown variable should fail");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown variable"),
+        "Error should mention unknown variable, got: {stderr}"
+    );
+}
+
+#[rstest]
+fn test_var_flag_last_value_wins(repo: TestRepo) {
+    // Test that when the same variable is specified multiple times, the last value wins
+    repo.write_test_config(
+        r#"[post-create]
+test = "echo '{{ target }}' > target_output.txt"
+"#,
+    );
+
+    let output = repo
+        .wt_command()
+        .args([
+            "hook",
+            "post-create",
+            "--yes",
+            "--var",
+            "target=FIRST",
+            "--var",
+            "target=SECOND",
+        ])
+        .output()
+        .expect("Failed to run wt hook");
+
+    assert!(output.status.success());
+
+    let output_file = repo.root_path().join("target_output.txt");
+    let contents = std::fs::read_to_string(&output_file).expect("Should have created output file");
+    assert!(
+        contents.contains("SECOND"),
+        "Last --var value should win, got: {contents}"
+    );
+}
+
+#[rstest]
+fn test_var_flag_deprecated_alias_works(repo: TestRepo) {
+    // Test that deprecated variable aliases (main_worktree, repo_root, worktree) can be overridden
+    repo.write_test_config(
+        r#"[post-create]
+test = "echo '{{ main_worktree }}' > alias_output.txt"
+"#,
+    );
+
+    let output = repo
+        .wt_command()
+        .args([
+            "hook",
+            "post-create",
+            "--yes",
+            "--var",
+            "main_worktree=/custom/path",
+        ])
+        .output()
+        .expect("Failed to run wt hook");
+
+    assert!(output.status.success());
+
+    let output_file = repo.root_path().join("alias_output.txt");
+    let contents = std::fs::read_to_string(&output_file).expect("Should have created output file");
+    assert!(
+        contents.contains("/custom/path"),
+        "Deprecated alias should be overridden, got: {contents}"
     );
 }

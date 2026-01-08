@@ -118,7 +118,7 @@ cleanup = "rm -rf /tmp/cache/{{ branch }}"
 - **pre-remove** — Before removing worktree during cleanup
 - **post-merge** — After cleanup completes
 
-See [wt merge](@/merge.md#pipeline) for the complete pipeline.
+See [`wt merge`](@/merge.md#pipeline) for the complete pipeline.
 
 ## Configuration
 
@@ -153,6 +153,8 @@ Hooks can use template variables that expand at runtime:
 | `{{ remote_url }}` | git@github.com:user/repo.git | Remote URL |
 | `{{ upstream }}` | origin/feature | Upstream tracking branch |
 | `{{ target }}` | main | Target branch (merge hooks only) |
+| `{{ base }}` | main | Base branch (creation hooks only) |
+| `{{ base_worktree_path }}` | /path/to/myproject | Base branch worktree (creation hooks only) |
 
 See [Designing effective hooks](#designing-effective-hooks) for `main_worktree_path` patterns.
 
@@ -386,9 +388,12 @@ wt hook pre-merge project:     # Run all project hooks
 wt hook pre-merge user:test    # Run only user's "test" hook
 wt hook pre-merge project:test # Run only project's "test" hook
 wt hook pre-merge --yes        # Skip approval prompts (for CI)
+wt hook post-create --var branch=feature/test  # Override template variable
 ```
 
 The `user:` and `project:` prefixes filter by source. Use `user:` or `project:` alone to run all hooks from that source, or `user:name` / `project:name` to run a specific hook.
+
+The `--var KEY=VALUE` flag lets you override built-in template variables — useful for testing hooks with different contexts without switching to that context.
 
 ## Language-specific tips
 
@@ -470,9 +475,9 @@ fi
 
 ## See also
 
-- [wt merge](@/merge.md) — Runs hooks automatically during merge
-- [wt switch](@/switch.md) — Runs post-create/post-start hooks on `--create`
-- [wt config](@/config.md) — Manage hook approvals
+- [`wt merge`](@/merge.md) — Runs hooks automatically during merge
+- [`wt switch`](@/switch.md) — Runs post-create/post-start hooks on `--create`
+- [`wt config`](@/config.md) — Manage hook approvals
 
 ## Command reference
 
